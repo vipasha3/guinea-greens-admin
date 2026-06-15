@@ -1,35 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient'; // તમારી Supabase ક્લાયન્ટ ફાઇલ
 
-const Inventory = ({ products, setProducts }) => {
+const Inventory = () => {
+  const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({ 
     nameEn: '', nameFr: '', stock: '', price: '', image: 'https://via.placeholder.com/50' 
   });
   const [editingId, setEditingId] = useState(null);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const newProduct = { 
-      ...formData, 
-      id: editingId || Date.now(), 
-      active: true,
-      stock: Number(formData.stock), 
-      price: formData.price
-    };
+  // પેજ લોડ થાય ત્યારે ડેટા ફેચ કરવા માટે
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-    if (editingId) {
-      setProducts(products.map(p => p.id === editingId ? newProduct : p));
-      setEditingId(null);
+  const fetchProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*');
+    if (error) {
+      console.error('Error fetching products:', error);
     } else {
-      setProducts([...products, newProduct]);
+      setProducts(data);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (editingId) {
+      // ડેટા અપડેટ કરવા માટે
+      const { error } = await supabase
+        .from('products')
+        .update({ 
+          name_en: formData.nameEn, 
+          name_fr: formData.nameFr, 
+          stock: Number(formData.stock), 
+          price: Number(formData.price) 
+        })
+        .eq('id', editingId);
+      
+      if (!error) setEditingId(null);
+    } else {
+      // નવો ડેટા ઉમેરવા માટે
+      const { error } = await supabase
+        .from('products')
+        .insert([{ 
+          name_en: formData.nameEn, 
+          name_fr: formData.nameFr, 
+          stock: Number(formData.stock), 
+          price: Number(formData.price), 
+          image: formData.image 
+        }]);
+      
+      if (error) console.error('Error adding product:', error);
+    }
+    
     setFormData({ nameEn: '', nameFr: '', stock: '', price: '', image: 'https://via.placeholder.com/50' });
+    fetchProducts(); // ડેટા રિફ્રેશ કરવા માટે
   };
 
   const startEdit = (product) => {
     setEditingId(product.id);
     setFormData({
-      nameEn: product.nameEn || product.name || '',
-      nameFr: product.nameFr || '',
+      nameEn: product.name_en || '',
+      nameFr: product.name_fr || '',
       stock: product.stock || '',
       price: product.price || '',
       image: product.image || 'https://via.placeholder.com/50'
@@ -69,8 +101,8 @@ const Inventory = ({ products, setProducts }) => {
               <tr key={p.id} className="hover:bg-gray-50 transition">
                 <td className="p-4"><img src={p.image} className="w-12 h-12 rounded-xl object-cover" alt="prod" /></td>
                 <td className="p-4">
-                  <p className="font-bold text-gray-800">{p.nameEn || p.name || "Unnamed"}</p>
-                  <p className="text-gray-400 text-xs">{p.nameFr || "---"}</p>
+                  <p className="font-bold text-gray-800">{p.name_en || "Unnamed"}</p>
+                  <p className="text-gray-400 text-xs">{p.name_fr || "---"}</p>
                 </td>
                 <td className="p-4 font-bold text-gray-700">{p.stock} kg</td>
                 <td className="p-4 font-bold text-gray-700">${p.price}</td>

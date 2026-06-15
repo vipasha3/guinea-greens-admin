@@ -1,45 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Map } from 'lucide-react';
+import { supabase } from '../supabaseClient'; 
 
 const Settings = () => {
   const [newRoute, setNewRoute] = useState("");
   const [routes, setRoutes] = useState([]);
 
   useEffect(() => {
-    const savedRoutes = JSON.parse(localStorage.getItem("myRoutes")) || [];
-    setRoutes(savedRoutes);
+    fetchNeighborhoods();
   }, []);
 
-  const addRoute = () => {
+  // neighborhoods ટેબલમાંથી ડેટા ફેચ કરો
+  const fetchNeighborhoods = async () => {
+    const { data, error } = await supabase.from('neighborhoods').select('*');
+    if (error) console.error('Error fetching neighborhoods:', error);
+    else setRoutes(data || []);
+  };
+
+  // નવો રૂટ ઉમેરવા માટે (neighborhoods ટેબલમાં insert)
+  const addRoute = async () => {
     if (newRoute.trim()) {
-      const updatedRoutes = [...routes, newRoute];
-      setRoutes(updatedRoutes);
-      localStorage.setItem("myRoutes", JSON.stringify(updatedRoutes));
-      setNewRoute("");
+      const { error } = await supabase.from('neighborhoods').insert([{ name: newRoute }]);
+      if (!error) {
+        setNewRoute("");
+        fetchNeighborhoods(); // ડેટા રિફ્રેશ કરો
+      } else {
+        console.error('Error adding neighborhood:', error);
+      }
     }
   };
 
-  const deleteRoute = (index) => {
-    const updatedRoutes = routes.filter((_, i) => i !== index);
-    setRoutes(updatedRoutes);
-    localStorage.setItem("myRoutes", JSON.stringify(updatedRoutes));
+  // ડિલીટ કરવા માટે
+  const deleteRoute = async (id) => {
+    const { error } = await supabase.from('neighborhoods').delete().eq('id', id);
+    if (!error) fetchNeighborhoods();
+    else console.error('Error deleting neighborhood:', error);
   };
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
-      {/* Page Title */}
       <h2 className="text-2xl font-bold text-gray-800 mb-6">System Settings</h2>
       
-      {/* Main Container - અહીં મેં Dashboard જેવું જ સ્ટાઈલિંગ વાપર્યું છે */}
       <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm max-w-xl">
         <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
           <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
             <Map size={20} />
           </div>
-          Manage Delivery Routes
+          Manage Delivery Neighborhoods
         </h3>
         
-        {/* Input Field */}
         <div className="flex gap-3 mb-8">
           <input 
             className="flex-1 border border-gray-200 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition" 
@@ -55,19 +64,19 @@ const Settings = () => {
           </button>
         </div>
 
-        {/* Route List */}
         <div className="space-y-3">
           {routes.length === 0 && (
-            <p className="text-gray-400 text-sm italic text-center py-4">No routes added yet.</p>
+            <p className="text-gray-400 text-sm italic text-center py-4">No neighborhoods added yet.</p>
           )}
-          {routes.map((route, index) => (
+          {routes.map((route) => (
             <div 
-              key={index} 
+              key={route.id} 
               className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition"
             >
-              <span className="font-medium text-gray-700">{route}</span>
+              {/* તમારા ટેબલની કોલમનું નામ 'name' છે તેવું ધાર્યું છે */}
+              <span className="font-medium text-gray-700">{route.name}</span>
               <button 
-                onClick={() => deleteRoute(index)} 
+                onClick={() => deleteRoute(route.id)} 
                 className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition"
               >
                 <Trash2 size={18} />

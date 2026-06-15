@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Package, ShoppingCart, Users, Settings as SettingsIcon, Megaphone } from 'lucide-react';
 
@@ -9,37 +9,8 @@ import Orders from './pages/Orders';
 import Drivers from './pages/Drivers';
 import Marketing from './pages/Marketing';
 import Settings from './pages/Settings';
-import { inventoryData } from './data';
 
 export default function App() {
-  // ૧. Inventory Data State
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem('myInventory');
-    return saved ? JSON.parse(saved) : inventoryData;
-  });
-
-  // ૨. Orders Data State
-  const [orders, setOrders] = useState([
-    { id: '#ORD-001', customer: 'Vipasha', address: '12, Shanti Nagar, Ahmedabad', items: 'Organic Tomatoes', total: 15.00, status: 'Pending' },
-    { id: '#ORD-002', customer: 'Raj Patel', address: '45, Green Valley, Gandhinagar', items: 'Broccoli', total: 12.00, status: 'Delivered' },
-  ]);
-
-  // ૩. Drivers Data State
-  const [drivers, setDrivers] = useState([
-    { id: 1, name: 'Rahul Sharma', vehicle: 'GJ-01-AB-1234', status: 'Available' },
-    { id: 2, name: 'Amit Patel', vehicle: 'GJ-05-CD-5678', status: 'On Delivery' },
-  ]);
-
-  // લોકલ સ્ટોરેજ ઇફેક્ટ
-  useEffect(() => {
-    localStorage.setItem('myInventory', JSON.stringify(products));
-  }, [products]);
-
-  // સ્ટોક અપડેટ લોજિક
-  const updateStock = (itemName) => {
-    setProducts(prev => prev.map(p => p.nameEn === itemName ? { ...p, stock: p.stock - 1 } : p));
-  };
-
   return (
     <Router>
       <div className="flex min-h-screen bg-gray-50">
@@ -68,11 +39,11 @@ export default function App() {
           
           <main className="p-8">
             <Routes>
-              {/* અહીં ડેટા પાસ કર્યો છે */}
-              <Route path="/" element={<Dashboard orders={orders} products={products} drivers={drivers} />} />
-              <Route path="/inventory" element={<Inventory products={products} setProducts={setProducts} />} />
-              <Route path="/orders" element={<Orders orders={orders} setOrders={setOrders} updateStock={updateStock} />} />
-              <Route path="/drivers" element={<Drivers drivers={drivers} setDrivers={setDrivers} />} />
+              {/* હવે અહીં props પાસ કરવાની જરૂર નથી, કારણ કે પેજ પોતે ડેટાબેઝમાંથી ડેટા લે છે */}
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/inventory" element={<Inventory />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/drivers" element={<Drivers />} />
               <Route path="/marketing" element={<Marketing />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

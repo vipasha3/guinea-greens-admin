@@ -1,32 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, CheckCircle, User, Truck, MapPin } from 'lucide-react';
+import { supabase } from '../supabaseClient'; 
 
-const Drivers = ({ drivers, setDrivers }) => {
-  const [routes, setRoutes] = useState([]);
+const Drivers = () => {
+  const [drivers, setDrivers] = useState([]);
   const [formData, setFormData] = useState({ name: '', phone: '', vehicle: '' });
-  const orders = ['#ORD-001', '#ORD-002'];
 
   useEffect(() => {
-    const savedRoutes = JSON.parse(localStorage.getItem("myRoutes")) || ['Conakry', 'City Center', 'North Zone'];
-    setRoutes(savedRoutes);
+    fetchDrivers();
   }, []);
 
-  const addDriver = () => {
+  const fetchDrivers = async () => {
+    const { data, error } = await supabase.from('riders').select('*');
+    if (error) console.error('Error fetching drivers:', error);
+    else setDrivers(data || []);
+  };
+
+  const addDriver = async () => {
     if(formData.name) {
-      const newDriver = { 
-        id: Date.now(), 
-        ...formData, 
-        route: routes[0] || 'Default', 
-        deliveries: 0, 
-        currentOrder: '-' 
-      };
-      setDrivers([...drivers, newDriver]);
-      setFormData({ name: '', phone: '', vehicle: '' });
+      const { error } = await supabase.from('riders').insert([
+        { name: formData.name, phone: formData.phone, vehicle: formData.vehicle, deliveries: 0 }
+      ]);
+      if (!error) {
+        setFormData({ name: '', phone: '', vehicle: '' });
+        fetchDrivers();
+      }
     }
   };
 
-  const updateDriver = (id, field, value) => {
-    setDrivers(drivers.map(d => d.id === id ? { ...d, [field]: value } : d));
+  const updateDelivery = async (id, currentDeliveries) => {
+    const { error } = await supabase
+      .from('riders')
+      .update({ deliveries: (currentDeliveries || 0) + 1 })
+      .eq('id', id);
+    
+    if (!error) fetchDrivers();
   };
 
   return (
@@ -36,7 +44,6 @@ const Drivers = ({ drivers, setDrivers }) => {
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
         <StatCard title="Active Drivers" value={drivers.length.toString()} icon={<User size={20}/>} color="bg-blue-50 text-blue-600" />
-        <StatCard title="Currently Busy" value={drivers.filter(d => d.currentOrder !== '-').length.toString()} icon={<Truck size={20}/>} color="bg-orange-50 text-orange-600" />
         <StatCard title="Total Deliveries" value={drivers.reduce((acc, d) => acc + (d.deliveries || 0), 0).toString()} icon={<MapPin size={20}/>} color="bg-emerald-50 text-emerald-600" />
       </div>
 
@@ -58,9 +65,7 @@ const Drivers = ({ drivers, setDrivers }) => {
               <th className="p-4 font-bold">Driver</th>
               <th className="p-4 font-bold">Phone</th>
               <th className="p-4 font-bold">Vehicle</th>
-              <th className="p-4 font-bold">Deliveries</th>
-              <th className="p-4 font-bold">Route</th>
-              <th className="p-4 font-bold">Assign Order</th>
+              <th className="p-4 font-bold text-center">Deliveries</th>
               <th className="p-4 font-bold text-center">Action</th>
             </tr>
           </thead>
@@ -70,21 +75,10 @@ const Drivers = ({ drivers, setDrivers }) => {
                 <td className="p-4 font-medium text-gray-800">{d.name}</td>
                 <td className="p-4 text-gray-600">{d.phone}</td>
                 <td className="p-4 text-gray-600">{d.vehicle}</td>
-                <td className="p-4 font-bold text-emerald-600">{d.deliveries}</td>
-                <td className="p-4">
-                  <select value={d.route} onChange={(e) => updateDriver(d.id, 'route', e.target.value)} className="border border-gray-200 p-1 rounded-lg">
-                    {routes.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </td>
-                <td className="p-4">
-                  <select value={d.currentOrder} onChange={(e) => updateDriver(d.id, 'currentOrder', e.target.value)} className="border border-gray-200 p-1 rounded-lg">
-                    <option value="-">Select Order</option>
-                    {orders.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </td>
+                <td className="p-4 font-bold text-emerald-600 text-center">{d.deliveries}</td>
                 <td className="p-4 text-center">
-                  <button onClick={() => updateDriver(d.id, 'deliveries', (d.deliveries || 0) + 1)} className="text-emerald-600 font-bold hover:underline flex items-center gap-1 mx-auto">
-                    <CheckCircle size={16}/> Done
+                  <button onClick={() => updateDelivery(d.id, d.deliveries)} className="text-emerald-600 font-bold hover:underline flex items-center gap-1 mx-auto">
+                    <CheckCircle size={16}/> Complete
                   </button>
                 </td>
               </tr>
@@ -96,7 +90,6 @@ const Drivers = ({ drivers, setDrivers }) => {
   );
 };
 
-// નાનું હેલ્પર ફંક્શન કાર્ડ્સ માટે
 function StatCard({ title, value, icon, color }) {
   return (
     <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
