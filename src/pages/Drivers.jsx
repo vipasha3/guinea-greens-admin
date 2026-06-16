@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CheckCircle, User, Truck, MapPin } from 'lucide-react';
+import { Plus, CheckCircle, User, MapPin, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient'; 
 
 const Drivers = () => {
@@ -10,21 +10,39 @@ const Drivers = () => {
     fetchDrivers();
   }, []);
 
+  // ડેટા ફેચ કરવા માટેનું ફંક્શન - અહીં .select('*') વાપર્યું છે જેથી કોઈ એરર ન આવે
   const fetchDrivers = async () => {
-    const { data, error } = await supabase.from('riders').select('*');
-    if (error) console.error('Error fetching drivers:', error);
-    else setDrivers(data || []);
+    const { data, error } = await supabase
+      .from('riders')
+      .select('*'); 
+    
+    if (error) {
+      console.error('Error fetching drivers:', error);
+      alert('Error fetching drivers: ' + error.message);
+    } else {
+      setDrivers(data || []);
+    }
   };
 
   const addDriver = async () => {
-    if(formData.name) {
+    if(formData.name && formData.phone) {
       const { error } = await supabase.from('riders').insert([
-        { name: formData.name, phone: formData.phone, vehicle: formData.vehicle, deliveries: 0 }
+        { 
+          name: formData.name, 
+          phone: formData.phone, 
+          vehicle: formData.vehicle, 
+          deliveries: 0 
+        }
       ]);
-      if (!error) {
+      
+      if (error) {
+        alert('Error adding driver: ' + error.message);
+      } else {
         setFormData({ name: '', phone: '', vehicle: '' });
         fetchDrivers();
       }
+    } else {
+      alert("Please fill in name and phone!");
     }
   };
 
@@ -34,7 +52,22 @@ const Drivers = () => {
       .update({ deliveries: (currentDeliveries || 0) + 1 })
       .eq('id', id);
     
-    if (!error) fetchDrivers();
+    if (error) {
+      alert('Error updating delivery: ' + error.message);
+    } else {
+      fetchDrivers();
+    }
+  };
+
+  const deleteDriver = async (id) => {
+    if (window.confirm("શું તમે આ ડ્રાઈવરને હટાવવા માંગો છો?")) {
+      const { error } = await supabase.from('riders').delete().eq('id', id);
+      if (error) {
+        alert('Error deleting driver: ' + error.message);
+      } else {
+        fetchDrivers();
+      }
+    }
   };
 
   return (
@@ -76,9 +109,12 @@ const Drivers = () => {
                 <td className="p-4 text-gray-600">{d.phone}</td>
                 <td className="p-4 text-gray-600">{d.vehicle}</td>
                 <td className="p-4 font-bold text-emerald-600 text-center">{d.deliveries}</td>
-                <td className="p-4 text-center">
-                  <button onClick={() => updateDelivery(d.id, d.deliveries)} className="text-emerald-600 font-bold hover:underline flex items-center gap-1 mx-auto">
+                <td className="p-4 flex justify-center gap-3">
+                  <button onClick={() => updateDelivery(d.id, d.deliveries)} className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
                     <CheckCircle size={16}/> Complete
+                  </button>
+                  <button onClick={() => deleteDriver(d.id)} className="text-red-500 hover:text-red-700">
+                    <Trash2 size={18}/>
                   </button>
                 </td>
               </tr>
