@@ -75,8 +75,10 @@ const Settings = () => {
               <div className={`w-6 h-6 bg-white rounded-full transition-transform duration-300 ${offerSettings.active ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
+          <label className="block text-sm font-semibold text-gray-600 mb-2">Maximum Orders for Offer</label>
           <input 
             type="number" 
+            placeholder="Enter max orders count"
             className="w-full border p-3 rounded-xl mb-4" 
             value={offerSettings.maxOrders} 
             onChange={(e) => setOfferSettings({...offerSettings, maxOrders: e.target.value})} 
@@ -92,8 +94,14 @@ const Settings = () => {
             <SettingsIcon className="text-blue-600" size={20} /> Delivery Charge Settings
           </h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
-            <input type="number" className="border p-3 rounded-xl" value={deliverySettings.minOrder} onChange={(e) => setDeliverySettings({...deliverySettings, minOrder: e.target.value})} />
-            <input type="number" className="border p-3 rounded-xl" value={deliverySettings.fee} onChange={(e) => setDeliverySettings({...deliverySettings, fee: e.target.value})} />
+            <div>
+              <label className="block text-sm font-semibold text-gray-600 mb-2">Min Order Amount</label>
+              <input type="number" placeholder="Min Order" className="w-full border p-3 rounded-xl" value={deliverySettings.minOrder} onChange={(e) => setDeliverySettings({...deliverySettings, minOrder: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-600 mb-2">Delivery Fee</label>
+              <input type="number" placeholder="Fee" className="w-full border p-3 rounded-xl" value={deliverySettings.fee} onChange={(e) => setDeliverySettings({...deliverySettings, fee: e.target.value})} />
+            </div>
           </div>
           <button onClick={() => saveSettings('delivery')} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">
             Save Delivery Settings

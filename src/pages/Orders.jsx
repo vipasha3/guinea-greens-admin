@@ -41,8 +41,7 @@ const Orders = () => {
     const { data, error } = await supabase
       .from('orders')
       .select('*, riders(name)')
-      .gte('created_at', `${selectedDate}T00:00:00`)
-      .lte('created_at', `${selectedDate}T23:59:59`)
+      .filter('created_at::date', 'eq', selectedDate) // આ લાઇન ટાઈમઝોનનો પ્રોબ્લેમ સોલ્વ કરી દેશે
       .order('created_at', { ascending: false });
     
     setRiders(ridersData || []);
