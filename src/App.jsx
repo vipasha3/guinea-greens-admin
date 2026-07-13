@@ -34,7 +34,7 @@ export default function App() {
         <div className="flex-1 overflow-auto">
           <header className="bg-white border-b p-4 px-8 flex justify-between items-center">
             <h2 className="text-xl font-bold text-slate-800">Admin Dashboard</h2>
-            <span className="text-sm">Welcome, <strong className="text-emerald-600">Vipasha!</strong></span>
+            <span className="text-sm">Welcome, <strong className="text-emerald-600">Hitesh!</strong></span>
           </header>
           
           <main className="p-8">
