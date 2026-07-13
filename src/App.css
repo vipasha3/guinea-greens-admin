@@ -1,0 +1,33 @@
+.card-style {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important; /* હળવી બોર્ડર */
+  border-radius: 16px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ઈનપુટ બોક્સ માટે */
+input {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 10px !important;
+  padding: 8px 12px !important;
+}
+
+/* ટેબલ માટે */
+/* ટેબલ માટે */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%; /* ટેબલ આખા ડબ્બામાં ફેલાઈ જાય */
+}
+
+/* નવો ભાગ અહીં ઉમેરો */
+.table-responsive {
+  overflow-x: auto; /* આ જાદુઈ લાઈન છે */
+  width: 100%;
+}
+
+body {
+  background-color: #f9fafb; /* એકદમ સોફ્ટ ગ્રે બેકગ્રાઉન્ડ */
+  margin: 0;
+  font-family: sans-serif;
+}
