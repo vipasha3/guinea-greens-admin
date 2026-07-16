@@ -21,7 +21,7 @@ export default function Dashboard() {
     // ૨. લેટેસ્ટ ૫ ઓર્ડર ફેચ કરો (ટેબલ બતાવવા માટે)
     const { data: recentOrders } = await supabase
       .from('orders')
-      .select('*, riders(name)')
+      .select('*, riders(name)') // users(name) કાઢી નાખ્યું
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -95,7 +95,7 @@ export default function Dashboard() {
               {recentOrders.map(o => (
                 <tr key={o.id}>
                   <td className="py-3 text-emerald-600 font-medium">#{o.id.slice(0, 7)}</td>
-                  <td className="py-3">{o.users?.name || "Guest"}</td>
+                  <td className="py-3">{o.customer_name || "Guest"}</td>
                   <td className="py-3">
                     <span className="px-2 py-1 bg-gray-100 rounded-full text-[10px] uppercase font-bold">
                       {o.status}

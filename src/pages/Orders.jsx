@@ -35,19 +35,30 @@ const Orders = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    
+    // આજની તારીખ અને આવતીકાલની તારીખ મેળવો
+    const startOfDay = `${selectedDate}T00:00:00`;
+    const endOfDay = `${selectedDate}T23:59:59`;
+
     const { data: ridersData } = await supabase.from('riders').select('id, name');
     const { data: productsData } = await supabase.from('products').select('id, name_en');
     
     const { data, error } = await supabase
       .from('orders')
       .select('*, riders(name)')
-      .filter('created_at::date', 'eq', selectedDate) // આ લાઇન ટાઈમઝોનનો પ્રોબ્લેમ સોલ્વ કરી દેશે
+      .gte('created_at', startOfDay) // આ તારીખથી શરૂ કરીને
+      .lte('created_at', endOfDay)   // આ તારીખના અંત સુધી
       .order('created_at', { ascending: false });
     
     setRiders(ridersData || []);
     setProducts(productsData || []);
-    if (error) console.error("Error fetching:", error);
-    else setOrders(data || []);
+    
+    if (error) {
+      console.error("Error fetching:", error);
+    } else {
+      setOrders(data || []);
+      console.log("Fetched Orders:", data); // આનાથી ચેક કરો કે ડેટા આવે છે કે નહીં
+    }
     setLoading(false);
   };
 
