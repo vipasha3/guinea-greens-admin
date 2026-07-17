@@ -14,7 +14,10 @@ const Orders = () => {
     const channel = supabase
       .channel('schema-db-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-        if (payload.new.created_at.includes(selectedDate)) setOrders((prev) => [payload.new, ...prev]);
+        // ખાતરી કરો કે payload.new અસ્તિત્વમાં છે
+        if (payload.new && payload.new.created_at?.includes(selectedDate)) {
+          setOrders((prev) => [payload.new, ...prev]);
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
         setOrders((prev) => prev.map(o => o.id === payload.new.id ? payload.new : o));
@@ -90,9 +93,16 @@ const Orders = () => {
                 </td>
                 <td className="p-4 text-xs text-gray-600 max-w-[200px] truncate">{o.full_address}</td>
                 <td className="p-4 text-xs">
-                    {JSON.parse(o.items || '[]').map((item, i) => (
-                        <div key={i}>• {getProductName(item.product_id)} <span className="font-bold">x{item.quantity}</span></div>
-                    ))}
+                    {(() => {
+                        try {
+                            const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
+                            return items.map((item, i) => (
+                                <div key={i}>• {getProductName(item.product_id)} <span className="font-bold">x{item.quantity}</span></div>
+                            ));
+                        } catch (e) {
+                            return <span>Error loading items</span>;
+                        }
+                    })()}
                 </td>
                 <td className="p-4 font-semibold text-gray-800">{o.total_gnf} GNF</td>
                 <td className="p-4">
@@ -137,4 +147,4 @@ const Orders = () => {
   );
 };
 
-export default Orders;  
+export default Orders;
