@@ -5,7 +5,8 @@ const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({ 
-    nameEn: '', nameFr: '', nameZh: '', stock: '', price: '', image_url: '', unit: 'kg', step: '0.5', category_id: '' 
+    nameEn: '', nameFr: '', nameZh: '', stock: '', price: '', image_url: '', unit: 'kg', step: '0.5', category_id: '',
+    source_type: 'container', purchase_price: '' 
   });
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -22,7 +23,6 @@ const Inventory = () => {
     fetchProducts();
     fetchCategories();
 
-    // Real-time channel updated to include categories
     const channel = supabase
       .channel('inventory-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
@@ -108,7 +108,9 @@ const Inventory = () => {
       unit: formData.unit, 
       step: parseFloat(formData.step),
       category_id: formData.category_id || null, 
-      is_active: isActiveStatus
+      is_active: isActiveStatus,
+      source_type: formData.source_type,
+      purchase_price: parseFloat(formData.purchase_price) || 0
     };
 
     if (editingId) { 
@@ -118,13 +120,28 @@ const Inventory = () => {
       await supabase.from('products').insert([payload]); 
     }
     
-    setFormData({ nameEn: '', nameFr: '', nameZh: '', stock: '', price: '', image_url: '', unit: 'kg', step: '0.5', category_id: '' });
+    setFormData({ 
+      nameEn: '', nameFr: '', nameZh: '', stock: '', price: '', image_url: '', unit: 'kg', step: '0.5', category_id: '',
+      source_type: 'container', purchase_price: '' 
+    });
     setShowProductForm(false);
   };
 
   const startEdit = (p) => {
     setEditingId(p.id);
-    setFormData({ nameEn: p.name_en, nameFr: p.name_fr, nameZh: p.name_zh, stock: p.stock, price: p.price_gnf, image_url: p.image_url, unit: p.unit, step: p.step, category_id: p.category_id || '' });
+    setFormData({ 
+      nameEn: p.name_en, 
+      nameFr: p.name_fr, 
+      nameZh: p.name_zh, 
+      stock: p.stock, 
+      price: p.price_gnf, 
+      image_url: p.image_url, 
+      unit: p.unit, 
+      step: p.step, 
+      category_id: p.category_id || '',
+      source_type: p.source_type || 'container',
+      purchase_price: p.purchase_price || ''
+    });
     setShowProductForm(true);
   };
 
@@ -171,15 +188,30 @@ const Inventory = () => {
           <input placeholder="EN Name" className="border p-2 rounded-lg text-sm" value={formData.nameEn} onChange={(e) => setFormData({...formData, nameEn: e.target.value})} required />
           <input placeholder="FR Name" className="border p-2 rounded-lg text-sm" value={formData.nameFr} onChange={(e) => setFormData({...formData, nameFr: e.target.value})} />
           <input placeholder="ZH Name" className="border p-2 rounded-lg text-sm" value={formData.nameZh} onChange={(e) => setFormData({...formData, nameZh: e.target.value})} />
+          
           <select className="border p-2 rounded-lg text-sm" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})}>
             <option value="">Category</option>
             {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name_en}</option>)}
           </select>
-          <input type="number" placeholder="Stock" className="border p-2 rounded-lg text-sm" value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} />
-          <input type="number" placeholder="Price" className="border p-2 rounded-lg text-sm" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} />
-          <input placeholder="Unit" className="border p-2 rounded-lg text-sm" value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} />
-          <input type="number" step="0.1" placeholder="Step" className="border p-2 rounded-lg text-sm" value={formData.step} onChange={(e) => setFormData({...formData, step: e.target.value})} />
+
+          {/* Source Type */}
+          <select className="border p-2 rounded-lg text-sm font-semibold bg-blue-50 text-blue-800" value={formData.source_type} onChange={(e) => setFormData({...formData, source_type: e.target.value})}>
+            <option value="container">📦 Container</option>
+            <option value="local">🛒 Local Market</option>
+          </select>
+
+          {/* Purchase Price */}
+          <input type="number" placeholder="Purchase Price (Cost)" className="border p-2 rounded-lg text-sm bg-yellow-50" value={formData.purchase_price} onChange={(e) => setFormData({...formData, purchase_price: e.target.value})} required />
+
+          <input type="number" placeholder="Selling Price" className="border p-2 rounded-lg text-sm" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} required />
+          <input type="number" placeholder="Stock" className="border p-2 rounded-lg text-sm" value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} required />
+          
+          {/* Unit અને Step પાછા ઉમેરી દીધા છે */}
+          <input placeholder="Unit (e.g. kg, pcs)" className="border p-2 rounded-lg text-sm" value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} />
+          <input type="number" step="0.1" placeholder="Step (e.g. 0.5, 1)" className="border p-2 rounded-lg text-sm" value={formData.step} onChange={(e) => setFormData({...formData, step: e.target.value})} />
+          
           <input type="file" onChange={handleFileUpload} className="col-span-2 text-xs border p-2 rounded-lg" />
+          
           <button type="submit" disabled={uploading} className="col-span-2 md:col-span-4 bg-emerald-600 text-white p-2 rounded-lg font-bold">
             {uploading ? 'Uploading...' : (editingId ? 'Update Product' : 'Save Product')}
           </button>
@@ -204,7 +236,18 @@ const Inventory = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-[10px] text-gray-500 uppercase bg-gray-50">
-              <tr><th className="p-3">Img</th><th>Name</th><th>Category</th><th>Stock</th><th>Price</th><th>Unit/Step</th><th>Status</th><th>Action</th></tr>
+              <tr>
+                <th className="p-3">Img</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Source</th>
+                <th>Purchase Cost</th>
+                <th>Selling Price</th>
+                <th>Stock</th>
+                <th>Unit / Step</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredProducts.map((p) => (
@@ -212,9 +255,15 @@ const Inventory = () => {
                   <td className="p-3"><img src={p.image_url} className="w-8 h-8 rounded-md object-cover" alt="product" /></td>
                   <td className="font-bold">{p.name_en}</td>
                   <td>{p.categories?.name_en || '-'}</td>
+                  <td>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.source_type === 'container' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>
+                      {p.source_type === 'container' ? '📦 Container' : '🛒 Local'}
+                    </span>
+                  </td>
+                  <td className="text-gray-600 font-semibold">{p.purchase_price || 0} GNF</td>
+                  <td className="text-emerald-600 font-bold">{p.price_gnf} GNF</td>
                   <td>{p.stock}</td>
-                  <td>{p.price_gnf}</td>
-                  <td>{p.unit} / {p.step}</td>
+                  <td className="text-xs text-gray-500">{p.unit} / {p.step}</td>
                   <td>
                     <button onClick={() => toggleActive(p.id, p.is_active)} className={`px-2 py-0.5 rounded text-[10px] ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {p.is_active ? 'Active' : 'Inactive'}
