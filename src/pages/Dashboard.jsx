@@ -1,30 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, Plus, ShoppingCart, Box, DollarSign, ArrowUpRight, Award, Download, CheckCircle2, Activity, Percent, Filter, Clock } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
+import { TrendingUp, Package, AlertTriangle, Plus, ShoppingCart, Box, DollarSign, ArrowUpRight, Award, Download, CheckCircle2, Activity, Percent, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('7d'); 
-  const [orderFilter, setOrderFilter] = useState('all'); // all, pending, delivered
+  const [orderFilter, setOrderFilter] = useState('all'); 
+  
   const [stats, setStats] = useState({ 
     revenue: 0, 
     pending: 0, 
+    cancelled: 0,
+    deliveredCount: 0,
+    totalOrdersCount: 0,
     lowStock: 0,
     containerInvestment: 0,
     localInvestment: 0,
-    weeklyProfit: 0,
     monthlyProfit: 0,
     profitMargin: 0,
-    revenueGrowth: '0%'
+    revenueGrowth: '0%',
+    cancellationRate: '0%',
+    deliveryRate: '0%'
   });
+  
   const [allOrders, setAllOrders] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [lowStockProducts, setLowStockProducts] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [sourceData, setSourceData] = useState([]);
+  const [cancellationReasonData, setCancellationReasonData] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
 
   useEffect(() => {
@@ -49,12 +56,19 @@ export default function Dashboard() {
     let containerInvestment = 0;
     let localInvestment = 0;
     let lowStockList = [];
+    
+    let totalSellingPriceAll = 0;
+    let totalPurchasePriceAll = 0;
 
     if (productsData) {
       productsData.forEach(p => {
         const stockQty = Number(p.stock || p.quantity || 0);
-        const costPrice = Number(p.purchase_price || p.price || 0);
+        const costPrice = Number(p.purchase_price || 0);
+        const sellPrice = Number(p.price || p.selling_price || 0);
         const totalCost = stockQty * costPrice;
+
+        totalSellingPriceAll += sellPrice;
+        totalPurchasePriceAll += costPrice;
 
         const sourceType = (p.source_type || p.category || '').toLowerCase();
         if (sourceType.includes('local')) {
@@ -68,10 +82,15 @@ export default function Dashboard() {
             id: p.id,
             name: p.name_en || p.name || p.title || 'Product',
             stock: stockQty,
-            type: sourceType || 'general'
+            type: sourceType || 'container'
           });
         }
       });
+    }
+
+    let calculatedProfitMarginRatio = 0.35;
+    if (totalSellingPriceAll > 0 && totalPurchasePriceAll > 0 && totalSellingPriceAll > totalPurchasePriceAll) {
+      calculatedProfitMarginRatio = (totalSellingPriceAll - totalPurchasePriceAll) / totalSellingPriceAll;
     }
 
     setLowStockProducts(lowStockList);
@@ -86,25 +105,66 @@ export default function Dashboard() {
       setTopProducts(sortedProds);
     }
 
+    let calculatedRevenue = 0;
+    let calculatedPending = 0;
+    let calculatedCancelled = 0;
+    let calculatedDelivered = 0;
+    let calculatedMonthlyProfit = 0;
+    let growthText = "0%";
+    let overallProfitMargin = Math.round(calculatedProfitMarginRatio * 100);
+    let cancellationRateText = "0%";
+    let deliveryRateText = "0%";
+
     if (allOrdersData) {
       setAllOrders(allOrdersData);
       setRecentOrders(allOrdersData.slice(0, 5));
 
+      const totalOrdersCount = allOrdersData.length;
+      
       const deliveredOrders = allOrdersData.filter(o => {
         const status = (o.status || '').toLowerCase();
         return status === 'delivered' || status === 'completed' || status === 'success';
       });
+      calculatedDelivered = deliveredOrders.length;
       
-      const revenue = deliveredOrders.reduce((acc, o) => acc + Number(o.total_gnf || o.amount || o.total || 0), 0);
-      const pending = allOrdersData.filter(o => (o.status || '').toLowerCase() === 'pending').length;
-      const lowStock = lowStockList.length;
+      const cancelledOrders = allOrdersData.filter(o => {
+        const status = (o.status || '').toLowerCase();
+        return status === 'cancelled' || status === 'canceled' || status === 'rejected';
+      });
+
+      calculatedCancelled = cancelledOrders.length;
+      calculatedPending = allOrdersData.filter(o => (o.status || '').toLowerCase() === 'pending').length;
+
+      if (totalOrdersCount > 0) {
+        const cancelRate = (calculatedCancelled / totalOrdersCount) * 100;
+        const deliveryRate = (calculatedDelivered / totalOrdersCount) * 100;
+        cancellationRateText = `${cancelRate.toFixed(1)}%`;
+        deliveryRateText = `${deliveryRate.toFixed(1)}%`;
+      }
+
+      const reasonCounts = {};
+      cancelledOrders.forEach(ord => {
+        const reason = ord.cancellation_reason || ord.reason || ord.note || ord.remark || 'Not Specified';
+        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+      });
+
+      let formattedReasons = Object.keys(reasonCounts).map(key => ({
+        name: key,
+        value: reasonCounts[key]
+      }));
+
+      if (formattedReasons.length === 0) {
+        formattedReasons.push({ name: 'No Cancellations', value: 1 });
+      }
+      setCancellationReasonData(formattedReasons);
+
+      calculatedRevenue = deliveredOrders.reduce((acc, o) => acc + Number(o.total_gnf || o.amount || o.total || 0), 0);
 
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
       const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-      // Current week vs Previous week revenue for dynamic growth calculation
       const currentWeekRevenue = deliveredOrders
         .filter(o => new Date(o.created_at || o.date) >= oneWeekAgo)
         .reduce((acc, o) => acc + Number(o.total_gnf || o.amount || o.total || 0), 0);
@@ -116,7 +176,6 @@ export default function Dashboard() {
         })
         .reduce((acc, o) => acc + Number(o.total_gnf || o.amount || o.total || 0), 0);
 
-      let growthText = "0%";
       if (prevWeekRevenue > 0) {
         const growth = ((currentWeekRevenue - prevWeekRevenue) / prevWeekRevenue) * 100;
         growthText = `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`;
@@ -127,21 +186,8 @@ export default function Dashboard() {
       const monthlyDelivered = deliveredOrders.filter(o => new Date(o.created_at || o.date) >= oneMonthAgo);
       const monthlyRevenue = monthlyDelivered.reduce((acc, o) => acc + Number(o.total_gnf || o.amount || o.total || 0), 0);
 
-      const monthlyProfit = monthlyRevenue * 0.25; 
-      const dynamicMargin = monthlyRevenue > 0 ? 25 : 0; // Dynamic or default baseline
+      calculatedMonthlyProfit = monthlyRevenue * calculatedProfitMarginRatio;
 
-      setStats({ 
-        revenue, 
-        pending, 
-        lowStock,
-        containerInvestment,
-        localInvestment,
-        monthlyProfit,
-        profitMargin: dynamicMargin,
-        revenueGrowth: growthText
-      });
-
-      // Charts setup
       const daysCount = timeRange === '30d' ? 30 : 7;
       const lastDays = [];
       for (let i = daysCount - 1; i >= 0; i--) {
@@ -164,22 +210,61 @@ export default function Dashboard() {
 
       const logs = allOrdersData.slice(0, 4).map((ord, idx) => ({
         id: idx,
-        title: `Order #${ord.id.slice(0, 6)} processed`,
+        title: `Order #${ord.id.slice(0, 6)} status: ${ord.status || 'Updated'}`,
         time: new Date(ord.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: ord.status || 'Pending'
       }));
       setActivityLogs(logs);
     }
+
+    setStats({ 
+      revenue: calculatedRevenue, 
+      pending: calculatedPending, 
+      cancelled: calculatedCancelled,
+      deliveredCount: calculatedDelivered,
+      totalOrdersCount: allOrdersData ? allOrdersData.length : 0,
+      lowStock: lowStockList.length,
+      containerInvestment,
+      localInvestment,
+      monthlyProfit: Math.round(calculatedMonthlyProfit),
+      profitMargin: overallProfitMargin,
+      revenueGrowth: growthText,
+      cancellationRate: cancellationRateText,
+      deliveryRate: deliveryRateText
+    });
   };
 
   const exportReport = () => {
-    alert("Executive Report Generated Successfully!");
+    const csvRows = [
+      ["Metric", "Value"],
+      ["Total Revenue", `${stats.revenue} GNF`],
+      ["Revenue Growth", stats.revenueGrowth],
+      ["Total Orders", stats.totalOrdersCount],
+      ["Delivered Orders", stats.deliveredCount],
+      ["Cancelled Orders", stats.cancelled],
+      ["Delivery Rate", stats.deliveryRate],
+      ["Cancellation Rate", stats.cancellationRate],
+      ["Low Stock Items", stats.lowStock],
+      ["Profit Margin Ratio", `${stats.profitMargin}%`],
+      ["Monthly Net Profit", `${stats.monthlyProfit} GNF`]
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `executive_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
+
+  const COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#10b981'];
 
   return (
     <div className="pt-2 px-6 pb-8 bg-slate-50 min-h-screen space-y-6 font-sans text-slate-900">
       
-      {/* HEADER WITH ACTIONS */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-5 gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -188,7 +273,7 @@ export default function Dashboard() {
               <CheckCircle2 size={12} /> Live Sync
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">Real-time business intelligence, capital allocation & cash flow.</p>
+          <p className="text-sm text-slate-500 mt-1">Real-time business intelligence, order tracking & performance.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -227,18 +312,59 @@ export default function Dashboard() {
           color="border-emerald-200 bg-emerald-50/50 text-emerald-700" 
         />
         <StatCard title="PENDING ORDERS" value={stats.pending.toString()} icon={<Package size={22}/>} color="border-blue-200 bg-blue-50/50 text-blue-700" />
-        <StatCard title="LOW STOCK ALERTS" value={stats.lowStock > 0 ? `${stats.lowStock} Items` : "Optimal"} icon={<AlertTriangle size={22}/>} color={stats.lowStock > 0 ? "border-rose-200 bg-rose-50/50 text-rose-700" : "border-emerald-200 bg-emerald-50/50 text-emerald-700"} />
-        <StatCard title="PROFIT MARGIN RATIO" value={`${stats.profitMargin}%`} icon={<Percent size={22}/>} trend={stats.profitMargin > 0 ? "Active" : "Stable"} color="border-cyan-200 bg-cyan-50/50 text-cyan-700" />
+        <StatCard title="CANCELLED ORDERS" value={`${stats.cancelled} (${stats.cancellationRate})`} icon={<XCircle size={22}/>} color="border-rose-200 bg-rose-50/50 text-rose-700" />
+        <StatCard title="PROFIT MARGIN RATIO" value={`${stats.profitMargin}%`} icon={<Percent size={22}/>} trend="Dynamic" color="border-cyan-200 bg-cyan-50/50 text-cyan-700" />
+      </div>
+
+      {/* SUCCESS vs CANCELLATION RATIO BANNER */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+          <div>
+            <h3 className="font-bold text-slate-800 text-base">Order Performance Ratio (Delivered vs Cancelled)</h3>
+            <p className="text-xs text-slate-500">Compare fulfillment success against order dropouts</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-bold">
+            <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Delivery Rate: {stats.deliveryRate}
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-3 py-1 rounded-xl border border-rose-200">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Cancellation Rate: {stats.cancellationRate}
+            </span>
+          </div>
+        </div>
+        
+        <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden flex p-0.5 border border-slate-200">
+          <div 
+            className="bg-emerald-500 h-full rounded-l-full transition-all duration-500" 
+            style={{ width: stats.totalOrdersCount > 0 ? `${(stats.deliveredCount / stats.totalOrdersCount) * 100}%` : '0%' }}
+            title={`Delivered: ${stats.deliveredCount}`}
+          ></div>
+          <div 
+            className="bg-amber-400 h-full transition-all duration-500" 
+            style={{ width: stats.totalOrdersCount > 0 ? `${(stats.pending / stats.totalOrdersCount) * 100}%` : '0%' }}
+            title={`Pending: ${stats.pending}`}
+          ></div>
+          <div 
+            className="bg-rose-500 h-full rounded-r-full transition-all duration-500" 
+            style={{ width: stats.totalOrdersCount > 0 ? `${(stats.cancelled / stats.totalOrdersCount) * 100}%` : '0%' }}
+            title={`Cancelled: ${stats.cancelled}`}
+          ></div>
+        </div>
+        <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 font-medium">
+          <span>Total Orders Processed: <strong className="text-slate-800">{stats.totalOrdersCount}</strong></span>
+          <span>Successfully Delivered: <strong className="text-emerald-700">{stats.deliveredCount}</strong></span>
+          <span>Cancelled Dropouts: <strong className="text-rose-700">{stats.cancelled}</strong></span>
+        </div>
       </div>
 
       {/* FINANCIAL & INVESTMENT STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <InvestmentCard title="CONTAINER CAPITAL" value={`${stats.containerInvestment.toLocaleString()} GNF`} desc="Total capital locked in container shipments" icon={<Box size={20}/>} borderColor="border-purple-200 bg-white" iconBg="bg-purple-100 text-purple-600" />
         <InvestmentCard title="LOCAL MARKET CAPITAL" value={`${stats.localInvestment.toLocaleString()} GNF`} desc="Capital allocated in local marketplace procurement" icon={<ShoppingCart size={20}/>} borderColor="border-amber-200 bg-white" iconBg="bg-amber-100 text-amber-600" />
-        <InvestmentCard title="MONTHLY ESTIMATED PROFIT" value={`${stats.monthlyProfit.toLocaleString()} GNF`} desc="Projected net earnings based on current month volume" icon={<DollarSign size={20}/>} borderColor="border-emerald-200 bg-white" iconBg="bg-emerald-100 text-emerald-600" />
+        <InvestmentCard title="MONTHLY NET PROFIT" value={`${stats.monthlyProfit.toLocaleString()} GNF`} desc="Calculated net earnings based on product pricing" icon={<DollarSign size={20}/>} borderColor="border-emerald-200 bg-white" iconBg="bg-emerald-100 text-emerald-600" />
       </div>
 
-      {/* CHARTS SECTION */}
+      {/* CHARTS SECTION: REVENUE VELOCITY + CANCELLATION REASONS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
@@ -269,37 +395,118 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* CANCELLATION REASONS BREAKDOWN PIE CHART */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="font-bold text-slate-800 text-base">Capital Allocation</h3>
-            <p className="text-xs text-slate-500 mb-4">Container vs Local Sourcing Share</p>
+            <div className="flex items-center gap-2 mb-1">
+              <XCircle size={18} className="text-rose-600" />
+              <h3 className="font-bold text-slate-800 text-base">Cancellation Breakdown</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Why customers are cancelling orders</p>
           </div>
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sourceData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis dataKey="name" type="category" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} width={100} />
-                <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '12px' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                  {sourceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? '#8b5cf6' : '#f59e0b'} />
+              <PieChart>
+                <Pie
+                  data={cancellationReasonData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {cancellationReasonData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
-                </Bar>
-              </BarChart>
+                </Pie>
+                <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '12px' }} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: '11px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200 mt-4 flex items-center justify-between">
-            <span>Asset Distribution Ratio</span>
-            <span className="font-bold text-slate-800">Balanced</span>
+          <div className="text-xs text-slate-600 bg-rose-50 p-3 rounded-xl border border-rose-100 mt-4 flex items-center justify-between">
+            <span>Cancellation Rate</span>
+            <span className="font-bold text-rose-700">{stats.cancellationRate}</span>
           </div>
         </div>
       </div>
 
-      {/* MIDDLE SECTION: RECENT TRANSACTIONS + ACTIVITY LOG */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* TOP KEY PRODUCTS & LOW STOCK ATTENTION LIST (ચાર્ટ્સની નીચે) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* RECENT TRANSACTIONS */}
+        {/* Top Key Products */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Award size={20} className="text-emerald-600" />
+              <h3 className="font-bold text-slate-800 text-base">Top Key Products</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Top items currently holding highest inventory volume</p>
+
+            <div className="space-y-3">
+              {topProducts.length > 0 ? topProducts.map((p) => (
+                <div key={p.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">{p.name_en || p.name || p.title || 'Product'}</h4>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-0.5">TYPE: {p.source_type || p.category || 'CONTAINER'}</p>
+                  </div>
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold text-xs px-3 py-1.5 rounded-xl">
+                    {p.stock || p.quantity || 0} Qty
+                  </span>
+                </div>
+              )) : (
+                <p className="text-xs text-slate-400 text-center py-6">No products found.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-slate-100">
+            <button onClick={() => navigate('/inventory')} className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
+              View Complete Inventory
+            </button>
+          </div>
+        </div>
+
+        {/* Low Stock Attention List */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertCircle size={20} className="text-rose-600" />
+              <h3 className="font-bold text-slate-800 text-base">Low Stock Attention List</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Items requiring immediate reordering (&lt; 10 Qty)</p>
+
+            <div className="space-y-3">
+              {lowStockProducts.length > 0 ? lowStockProducts.slice(0, 3).map((p) => (
+                <div key={p.id} className="p-3.5 rounded-2xl bg-rose-50/40 border border-rose-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">{p.name}</h4>
+                    <p className="text-[10px] text-rose-600 uppercase tracking-wider font-bold mt-0.5">TYPE: {p.type.toUpperCase()}</p>
+                  </div>
+                  <span className="bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs px-3 py-1.5 rounded-xl">
+                    {p.stock} Qty
+                  </span>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-2xl border border-slate-100">
+                  All products are sufficiently stocked! 🎉
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-slate-100">
+            <button onClick={() => navigate('/inventory')} className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-rose-600/20">
+              Restock Inventory Now
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      {/* RECENT TRANSACTIONS + ACTIVITY LOG */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3">
@@ -308,10 +515,11 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-500">Latest orders processed through the platform</p>
               </div>
               
-              <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
-                <button onClick={() => setOrderFilter('all')} className={`px-3 py-1 rounded-lg transition-all ${orderFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>All</button>
-                <button onClick={() => setOrderFilter('pending')} className={`px-3 py-1 rounded-lg transition-all ${orderFilter === 'pending' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>Pending</button>
-                <button onClick={() => setOrderFilter('delivered')} className={`px-3 py-1 rounded-lg transition-all ${orderFilter === 'delivered' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>Delivered</button>
+              <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl text-xs font-bold gap-1">
+                <button onClick={() => setOrderFilter('all')} className={`px-2.5 py-1 rounded-lg transition-all ${orderFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>All</button>
+                <button onClick={() => setOrderFilter('pending')} className={`px-2.5 py-1 rounded-lg transition-all ${orderFilter === 'pending' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>Pending</button>
+                <button onClick={() => setOrderFilter('delivered')} className={`px-2.5 py-1 rounded-lg transition-all ${orderFilter === 'delivered' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>Delivered</button>
+                <button onClick={() => setOrderFilter('cancelled')} className={`px-2.5 py-1 rounded-lg transition-all ${orderFilter === 'cancelled' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}>Cancelled</button>
               </div>
             </div>
 
@@ -333,7 +541,8 @@ export default function Dashboard() {
                       <td className="p-3.5">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-black tracking-wider ${
                           (o.status || '').toLowerCase() === 'delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          (o.status || '').toLowerCase() === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-600'
+                          (o.status || '').toLowerCase() === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          (o.status || '').toLowerCase() === 'cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600'
                         }`}>
                           {o.status || 'Unknown'}
                         </span>
@@ -357,7 +566,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* LIVE ACTIVITY LOG FEED */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -387,89 +595,8 @@ export default function Dashboard() {
             Secured via Supabase Realtime
           </div>
         </div>
-
       </div>
 
-      {/* BOTTOM SECTION: KEY PRODUCTS + LOW STOCK ALERT TABLE */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* KEY PRODUCTS */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Award size={18} className="text-emerald-600" />
-              <h3 className="font-bold text-slate-800 text-base">Top Key Products</h3>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">Top items currently holding highest inventory volume</p>
-            
-            <div className="space-y-3">
-              {topProducts.length > 0 ? topProducts.map((p, idx) => {
-                const productName = p.name_en || p.name || p.title || p.product_name || `Product #${idx + 1}`;
-                const productStock = p.stock ?? p.quantity ?? 0;
-                const productType = p.source_type || p.category || 'General';
-
-                return (
-                  <div key={p.id || idx} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                    <div className="truncate pr-2">
-                      <p className="text-xs font-bold text-slate-800 truncate">{productName}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{productType} Stock</p>
-                    </div>
-                    <span className="text-xs font-black bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-xl">
-                      {productStock} Qty
-                    </span>
-                  </div>
-                );
-              }) : (
-                <p className="text-xs text-slate-400 text-center py-6">No products found in inventory.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <button onClick={() => navigate('/inventory')} className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all text-center">
-              View Complete Inventory
-            </button>
-          </div>
-        </div>
-
-        {/* LOW STOCK ACTIONABLE TABLE */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle size={18} className="text-rose-600" />
-              <h3 className="font-bold text-slate-800 text-base">Low Stock Attention List</h3>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">Items requiring immediate reordering (&lt; 10 Qty)</p>
-
-            <div className="space-y-2.5">
-              {lowStockProducts.length > 0 ? lowStockProducts.map((item, idx) => (
-                <div key={item.id || idx} className="flex items-center justify-between p-3 rounded-2xl bg-rose-50/50 border border-rose-100">
-                  <div className="truncate pr-2">
-                    <p className="text-xs font-bold text-slate-900 truncate">{item.name}</p>
-                    <p className="text-[10px] text-rose-600 uppercase font-bold">Type: {item.type}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-black bg-rose-100 text-rose-700 px-2.5 py-1 rounded-xl">
-                      {item.stock} Qty Left
-                    </span>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center py-10 bg-slate-50 rounded-2xl border border-slate-100">
-                  <p className="text-xs text-emerald-600 font-bold">All inventory stock levels are optimal!</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <button onClick={() => navigate('/inventory')} className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all text-center shadow-md shadow-rose-600/20">
-              Restock Inventory Now
-            </button>
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }
