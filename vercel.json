@@ -1,4 +1,5 @@
 {
+  "nodeVersion": "26.x",
   "rewrites": [
     {
       "source": "/(.*)",
