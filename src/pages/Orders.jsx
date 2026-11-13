@@ -14,7 +14,6 @@ const Orders = () => {
     const channel = supabase
       .channel('schema-db-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-        // ખાતરી કરો કે payload.new અસ્તિત્વમાં છે
         if (payload.new && payload.new.created_at?.includes(selectedDate)) {
           setOrders((prev) => [payload.new, ...prev]);
         }
@@ -60,6 +59,12 @@ const Orders = () => {
     }
   };
 
+  // Helper function to check if order is Cash on Delivery
+  const isCashOrder = (order) => {
+    const method = order.payment_method?.toUpperCase() || '';
+    return method === 'COD' || method === 'CASH' || order.transaction_id === 'N/A' || !order.transaction_id;
+  };
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
@@ -75,71 +80,93 @@ const Orders = () => {
               <th className="p-4">Customer</th>
               <th className="p-4">Address</th>
               <th className="p-4">Items</th>
-              <th className="p-4">Total</th>
+              <th className="p-4">Total & Payment</th>
               <th className="p-4">Assign Driver</th>
               <th className="p-4">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {orders.map((o) => (
-              <tr key={o.id} className="hover:bg-gray-50 text-sm">
-                <td className="p-4 font-medium text-emerald-600">
+            {orders.map((o) => {
+              const isCOD = isCashOrder(o);
+              return (
+                <tr key={o.id} className="hover:bg-gray-50 text-sm">
+                  <td className="p-4 font-medium text-emerald-600">
                     #{o.id?.slice(0, 7)}
-                    <div className="text-[10px] text-gray-400 font-mono">Trans id: {o.transaction_id || "N/A"}</div>
-                </td>
-                <td className="p-4">
-                  <div className="font-bold text-gray-800">{o.customer_name || "Guest"}</div>
-                  <div className="text-[10px] text-gray-400">{o.om_phone || "No Phone"}</div>
-                </td>
-                <td className="p-4 text-xs text-gray-600 max-w-[200px] truncate">{o.full_address}</td>
-                <td className="p-4 text-xs">
+                    {!isCOD && (
+                      <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                        Trans id: {o.transaction_id}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <div className="font-bold text-gray-800">{o.customer_name || "Guest"}</div>
+                    <div className="text-[10px] text-gray-400">{o.om_phone || "No Phone"}</div>
+                  </td>
+                  <td className="p-4 text-xs text-gray-600 max-w-[200px] truncate">{o.full_address}</td>
+                  <td className="p-4 text-xs">
                     {(() => {
-                        try {
-                            const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
-                            return items.map((item, i) => (
-                                <div key={i}>• {getProductName(item.product_id)} <span className="font-bold">x{item.quantity}</span></div>
-                            ));
-                        } catch (e) {
-                            return <span>Error loading items</span>;
-                        }
+                      try {
+                        const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
+                        return items.map((item, i) => (
+                          <div key={i}>
+                            {getProductName(item.product_id)} <span className="font-bold">x{item.quantity}</span>
+                          </div>
+                        ));
+                      } catch (e) {
+                        return <span>Error loading items</span>;
+                      }
                     })()}
-                </td>
-                <td className="p-4 font-semibold text-gray-800">{o.total_gnf} GNF</td>
-                <td className="p-4">
-                  <select 
-                    value={o.rider_id || ""} 
-                    disabled={o.status === 'DELIVERED' || o.status === 'CANCELLED'} 
-                    onChange={(e) => handleUpdate(o.id, 'rider_id', e.target.value)} 
-                    className={`border p-1 rounded text-xs w-full bg-white ${o.status === 'DELIVERED' || o.status === 'CANCELLED' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                  >
-                    <option value="">Select Rider</option>
-                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                </td>
-                <td className="p-4">
-                  <select 
-                    value={o.status || 'PENDING'} 
-                    disabled={o.status === 'DELIVERED' || o.status === 'CANCELLED'} 
-                    onChange={(e) => handleUpdate(o.id, 'status', e.target.value)} 
-                    className={`p-1 rounded text-xs font-bold w-full ${o.status === 'DELIVERED' || o.status === 'CANCELLED' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${getStatusColor(o.status)}`}
-                  >
-                    <option value="PENDING">Pending</option>
-                    <option value="ASSIGNED">Assigned</option>
-                    <option value="DELIVERED">Delivered</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
-                  
-                  {o.status === 'DELIVERED' && (
-                    <div className="text-[10px] text-emerald-600 font-bold mt-1">✓ Order Completed</div>
-                  )}
-                  {o.status === 'CANCELLED' && (
-                    <div className="text-[9px] text-red-500 mt-1 italic">
-                      {o.cancelled_by}: {o.cancellation_reason}
+                  </td>
+                  <td className="p-4">
+                    <div className="font-semibold text-gray-800">{o.total_gnf} GNF</div>
+                    <div className="mt-1">
+                      {isCOD ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 inline-block">
+                          💵 Cash (COD)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 inline-block">
+                          📱 Online ({o.payment_method || 'Mobile Money'})
+                        </span>
+                      )}
                     </div>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="p-4">
+                    <select 
+                      value={o.rider_id || ""} 
+                      disabled={o.status === 'DELIVERED' || o.status === 'CANCELLED'} 
+                      onChange={(e) => handleUpdate(o.id, 'rider_id', e.target.value)} 
+                      className={`border p-1 rounded text-xs w-full bg-white ${o.status === 'DELIVERED' || o.status === 'CANCELLED' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                    >
+                      <option value="">Select Rider</option>
+                      {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-4">
+                    <select 
+                      value={o.status || 'PENDING'} 
+                      disabled={o.status === 'DELIVERED' || o.status === 'CANCELLED'} 
+                      onChange={(e) => handleUpdate(o.id, 'status', e.target.value)} 
+                      className={`p-1 rounded text-xs font-bold w-full ${o.status === 'DELIVERED' || o.status === 'CANCELLED' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${getStatusColor(o.status)}`}
+                    >
+                      <option value="PENDING">Pending</option>
+                      <option value="ASSIGNED">Assigned</option>
+                      <option value="DELIVERED">Delivered</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </select>
+                    
+                    {o.status === 'DELIVERED' && (
+                      <div className="text-[10px] text-emerald-600 font-bold mt-1">✓ Order Completed</div>
+                    )}
+                    {o.status === 'CANCELLED' && (
+                      <div className="text-[9px] text-red-500 mt-1 italic">
+                        {o.cancelled_by}: {o.cancellation_reason}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
